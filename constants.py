@@ -1,6 +1,0 @@
-TFRECORD_DIR = '/path/to/your/tfrecords/dir'
-MASK_DIR = '/path/to/your/masks/dir'
-SCAN_DIR = '/path/to/your/scans/dir'
-SWC_DIR = '/path/to/your/swc/dir'
-TIF_DIR = '/path/to/your/tifs/dir'
-RAW_DIR = '/path/to/your/raw/dir'
