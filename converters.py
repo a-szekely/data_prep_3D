@@ -26,7 +26,7 @@ class DataManager:
 
         for file in files:
             file_name = file.split('.')[0]
-            scan = io.imread('{}/{}.scan.tif'.format(self.scan_dir, file_name))
+            scan = io.imread('{}/{}.scan.tifs'.format(self.scan_dir, file_name))
             shape = scan.shape
             self._swc2raw(file_name, shape)
             self._raw2tif(file_name)
@@ -66,11 +66,11 @@ class DataManager:
                                 assert scan_resampled.shape == window_shape
 
                                 animal = masks[i].split('_')[0]
-                                io.imsave('{}/{}_{}_{}.scan.tif'.format(self.scan_dir, animal,
+                                io.imsave('{}/{}_{}_{}.scan.tifs'.format(self.scan_dir, animal,
                                                                         str(i).zfill(2),
                                                                         str(n).zfill(6)),
                                           scan_resampled)
-                                io.imsave('{}/{}_{}_{}.mask.tif'.format(self.mask_dir, animal,
+                                io.imsave('{}/{}_{}_{}.mask.tifs'.format(self.mask_dir, animal,
                                                                         str(i).zfill(2),
                                                                         str(n).zfill(6)),
                                           mask_resampled)
@@ -151,7 +151,7 @@ class DataManager:
         cmd_convert = '-x libconvert_file_format -f convert_format'
 
         in_path = '{}/{}.mask.raw'.format(self.raw_dir.rstrip('/'), file_name)
-        out_path = '{}/{}.mask.tif'.format(self.tif_dir.rstrip('/'), file_name)
+        out_path = '{}/{}.mask.tifs'.format(self.tif_dir.rstrip('/'), file_name)
 
         cmd_full = ' '.join([self.v3d_path, cmd_convert, '-i', in_path, '-o', out_path])
 
@@ -228,7 +228,7 @@ if __name__ == '__main__':
     MASK_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/masks/'
     SCAN_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/scans/'
     SWC_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/swc/'
-    TIF_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/tif/'
+    TIF_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/tifs/'
     RAW_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/raw/'
 
     converter = DataManager(TFRECORD_DIR, MASK_DIR, SCAN_DIR, SWC_DIR, RAW_DIR, TIF_DIR)
