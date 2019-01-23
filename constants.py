@@ -1,0 +1,6 @@
+TFRECORD_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/tfrecords/'
+MASK_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/masks/'
+SCAN_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/scans/'
+SWC_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/swc/'
+TIF_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/tif/'
+RAW_DIR = '/var/home/4thyr.oct2018/as2554/neuroseg/data/gold166/original/raw/'
