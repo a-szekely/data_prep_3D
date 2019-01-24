@@ -4,10 +4,8 @@ import warnings
 import re
 
 import numpy as np
-import scipy.ndimage  # TODO do I actually need this?
+import scipy.ndimage
 from skimage import io
-from skimage import util
-
 import dataprep.constants
 
 
@@ -35,66 +33,87 @@ def split_all(window_shape, stride):
 
     # Split each scan-mask pair
     for i in range(0, len(scans)):
-        datapoint_name = "{}_{}".format(scans[i].split('_')[0], scans[i].split('_')[1])
-
-        # Large files cause Out of Memory errors, so avoid splitting them
-        # TODO Change splitting algorithm to index into the scan/mask ndarrays instead of using util.view_as_windows
-
-        scan_stats = os.stat('/'.join([dataprep.constants.TIF_DIR, scans[i]]))
-        if scan_stats.st_size > 5.12e8:
-            # Skip files that are larger than ~0.5 Gigabyte
-            logging.warning("{} is too large, and will be ignored".format(datapoint_name))
-            continue
-
-        # Split scan and mask
-        mask_windows = split_one(masks[i], window_shape, stride)
-        scan_windows = split_one(scans[i], window_shape, stride)
-
-        pixel_scale = np.asarray(window_shape) / np.asarray(mask_windows[0, 0, 0].shape)
-
-        z_max = mask_windows.shape[0]
-        y_max = mask_windows.shape[1]
-        x_max = mask_windows.shape[2]
-
-        for z in range(0, z_max):
-            for y in range(0, y_max):
-                for x in range(0, x_max):
-                    if np.sum(mask_windows[z, y, x]) != 0:
-                        id = str(z * y_max * x_max + y * x_max + x).zfill(6)
-
-                        # Resample the window so it has the desired shape
-                        mask_resampled = resample(mask_windows[z, y, x], pixel_scale)
-                        scan_resampled = resample(scan_windows[z, y, x], pixel_scale)
-
-                        # Save mask and scan segments
-                        io.imsave('{}/{}_{}.scan.tifs'.format(dataprep.constants.SCAN_DIR, datapoint_name, id),
-                                  scan_resampled)
-                        io.imsave('{}/{}_{}.mask.tifs'.format(dataprep.constants.MASK_DIR, datapoint_name, id),
-                                  mask_resampled)
-
-                        logging.debug("Saved mask and scan of {}_{}.".format(datapoint_name, id))
-
-        logging.info("Successfully split {} - {} out of {} done".format(datapoint_name, (i+1), len(scans)))
+        try:
+            split_one(scans[i], masks[i], window_shape, stride)
+            logging.info("{} out of {} done".format(scans[i].split('.')[0], (i + 1), len(scans)))
+        except MemoryError as e:
+            logging.exception("The splitting process ran out of memory.", e)
 
 
-def split_one(filename, window_shape, stride):
+def split_one(scan_name, mask_name, window, stride):
+    """Split and resample one scan and mask pair, and save the results in the tif directory.
+
+    Split one mask and scan pair according to window_shape and stride. Then resample it to recover isotropic voxels.
+    Only resample and save the blocks which contain neuron segments.
+    """
+    datapoint_name = "{}_{}".format(scan_name.split('_')[0], scan_name.split('_')[1])
+
+    # Sample the scan and mask with a window transformed such that it has the same 3D resolution as the scan
+    window_scaled, stride_scaled = get_scaled_sampler(scan_name, window, stride)
+
+    # Read scan and mask stacks
+    mask = io.imread('/'.join([dataprep.constants.TIF_DIR, mask_name]))
+    scan = io.imread('/'.join([dataprep.constants.TIF_DIR, scan_name]))
+
+    mask_shape = np.asarray(mask.shape)
+    scan_shape = np.asarray(scan.shape)
+
+    # Ensure that the inputs are compatible
+    assert all(mask_shape == scan_shape)
+
+    # Pad mask and scan with zeros so that an integer number of samples can exactly be taken from them
+    padded_shape = mask_shape + (window_scaled - np.mod(mask_shape, stride_scaled))
+    mask = pad(mask, padded_shape)
+    scan = pad(scan, padded_shape)
+
+    # Move the window over the mask and scan pair, and resample and save each sample pair containing part of the neuron
+    moves_along_axis = ((padded_shape - window_scaled) / stride_scaled) + 1
+    for k in range(0, moves_along_axis[0]):
+        for j in range(0, moves_along_axis[1]):
+            for i in range(0, moves_along_axis[2]):
+                mask_sample = mask[(k * window_scaled[0]):((k + 1) * window_scaled[0]),
+                              (j * window_scaled[1]):((j + 1) * window_scaled[1]),
+                              (i * window_scaled[2]):((i + 1) * window_scaled[2])]
+
+                # Check the mask sample for the presence of neuron segment
+                if np.sum(mask_sample) > 0:
+                    scan_sample = mask[(k * window_scaled[0]):((k + 1) * window_scaled[0]),
+                                  (j * window_scaled[1]):((j + 1) * window_scaled[1]),
+                                  (i * window_scaled[2]):((i + 1) * window_scaled[2])]
+
+                    # Resample mask and scan to ensure isotropic voxels
+                    mask_sample = resample(mask_sample, window)
+                    scan_sample = resample(scan_sample, window)
+
+                    # Disable warnings while saving samples, which arise from the low contrast nature of the mask
+                    warnings.filterwarnings('ignore')
+
+                    n = str(k * moves_along_axis[1] * moves_along_axis[2] + j * moves_along_axis[2] + i).zfill(6)
+                    io.imsave("{}/{}_{}.mask.tif".format(dataprep.constants.MASK_DIR, datapoint_name, n), mask_sample)
+                    io.imsave("{}/{}_{}.scan.tif".format(dataprep.constants.SCAN_DIR, datapoint_name, n), scan_sample)
+
+                    logging.info("{}_{} was successfully saved".format(datapoint_name, n))
+
+                    warnings.filterwarnings('default')
+
+    logging.info('Successfully split and resampled {}'.format(datapoint_name))
+
+
+def get_scaled_sampler(filename, window_shape, stride):
+    # extract pixel dimensions from filename
     pixel_dims = get_pixel_dims(filename)
-    pixel_dim_scales = pixel_dims / np.min(pixel_dims)
 
-    window_shape_scaled = np.asarray(np.floor(window_shape / pixel_dim_scales))
-    window_shape_scaled = window_shape_scaled.astype(dtype=np.int)
+    # calculate how much the window and stride need to be scaled in each dimension
+    pixel_dim_scales = np.min(pixel_dims) / pixel_dims
 
-    stride_scaled = np.asarray(np.floor(stride / pixel_dim_scales))
-    stride_scaled = stride_scaled.astype(dtype=np.int)
+    # rescale window and stride
+    window_scaled = np.asarray(np.floor(window_shape * pixel_dim_scales), dtype=np.int)
+    stride_scaled = np.asarray(np.floor(stride * pixel_dim_scales), dtype=np.int)
 
-    stack = io.imread('/'.join([dataprep.constants.TIF_DIR, filename]))
-    stack_shape = np.asarray(stack.shape)
+    logging.debug("Window shape has been modified to {} and stride to {} to align with voxel resolution of {}".format(
+        window_scaled, window_shape, stride_scaled, stride, pixel_dims))
 
-    padded_shape = stack_shape + window_shape_scaled - np.mod(stack_shape, stride_scaled)
-    stack_padded = pad(stack, padded_shape)
-    windows = split(stack_padded, window_shape_scaled, stride_scaled)
-
-    return windows
+    return window_scaled, stride_scaled
 
 
 def get_pixel_dims(filename):
@@ -109,29 +128,18 @@ def get_pixel_dims(filename):
 
 
 def pad(stack, padded_shape):
-    assert len(padded_shape) == 3
-
     padded_stack = np.zeros(padded_shape)
     padded_stack[0:stack.shape[0], 0:stack.shape[1], 0:stack.shape[2]] = stack
-
-    assert all(padded_stack.shape == padded_shape)
 
     return padded_stack
 
 
-def resample(stack, pixel_dims):
-    pixel_scale = pixel_dims / min(pixel_dims)
-    scaled_stack = scipy.ndimage.zoom(stack, pixel_scale)
+def resample(stack, output_shape):
+    input_shape = stack.shape
+    scale = output_shape / input_shape
 
+    # Resample stack using cubic interpolation
+    scaled_stack = scipy.ndimage.zoom(stack, scale)
+
+    # NB. Fiji only likes int32
     return np.ascontiguousarray(scaled_stack, 'int32')
-
-
-def split(stack, window_shape, stride):
-    assert len(window_shape) == 3
-    assert len(stride) == 3
-    for i in range(0, 3):
-        residual = (stack.shape[i] - window_shape[i]) % stride[i]
-        assert residual == 0
-
-    samples = util.view_as_windows(stack, window_shape, stride)
-    return samples
