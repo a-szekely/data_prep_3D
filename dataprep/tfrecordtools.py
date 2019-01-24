@@ -40,7 +40,6 @@ def process_all_tfrecord():
 
         logging.info("Written {}.tfrecord - {} out of {} done".format(scan_files[i].split('.')[0],
                                                                       (i + 1), len(mask_files)))
-        visualise_example(example)
 
 
 def ndarray2feature(stack):
