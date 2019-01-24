@@ -35,7 +35,7 @@ def split_all(window_shape, stride):
     for i in range(0, len(scans)):
         try:
             split_one(scans[i], masks[i], window_shape, stride)
-            logging.info("{} out of {} done".format(scans[i].split('.')[0], (i + 1), len(scans)))
+            logging.info("{} out of {} done".format((i + 1), len(scans)))
         except MemoryError as e:
             logging.exception("The splitting process ran out of memory.", e)
 
@@ -68,21 +68,25 @@ def split_one(scan_name, mask_name, window, stride):
 
     # Move the window over the mask and scan pair, and resample and save each sample pair containing part of the neuron
     moves_along_axis = ((padded_shape - window_scaled) / stride_scaled) + 1
+    moves_along_axis = np.ndarray.astype(moves_along_axis, dtype=int)
     for k in range(0, moves_along_axis[0]):
         for j in range(0, moves_along_axis[1]):
             for i in range(0, moves_along_axis[2]):
                 mask_sample = mask[(k * window_scaled[0]):((k + 1) * window_scaled[0]),
-                              (j * window_scaled[1]):((j + 1) * window_scaled[1]),
-                              (i * window_scaled[2]):((i + 1) * window_scaled[2])]
+                                   (j * window_scaled[1]):((j + 1) * window_scaled[1]),
+                                   (i * window_scaled[2]):((i + 1) * window_scaled[2])]
 
                 # Check the mask sample for the presence of neuron segment
                 if np.sum(mask_sample) > 0:
-                    scan_sample = mask[(k * window_scaled[0]):((k + 1) * window_scaled[0]),
-                                  (j * window_scaled[1]):((j + 1) * window_scaled[1]),
-                                  (i * window_scaled[2]):((i + 1) * window_scaled[2])]
+                    scan_sample = scan[(k * window_scaled[0]):((k + 1) * window_scaled[0]),
+                                       (j * window_scaled[1]):((j + 1) * window_scaled[1]),
+                                       (i * window_scaled[2]):((i + 1) * window_scaled[2])]
 
                     # Resample mask and scan to ensure isotropic voxels
                     mask_sample = resample(mask_sample, window)
+                    mask_sample = (mask_sample > 0.1)
+                    mask_sample = mask_sample.astype(dtype=np.int32)
+
                     scan_sample = resample(scan_sample, window)
 
                     # Disable warnings while saving samples, which arise from the low contrast nature of the mask
@@ -92,7 +96,7 @@ def split_one(scan_name, mask_name, window, stride):
                     io.imsave("{}/{}_{}.mask.tif".format(dataprep.constants.MASK_DIR, datapoint_name, n), mask_sample)
                     io.imsave("{}/{}_{}.scan.tif".format(dataprep.constants.SCAN_DIR, datapoint_name, n), scan_sample)
 
-                    logging.info("{}_{} was successfully saved".format(datapoint_name, n))
+                    logging.debug("{}_{} was successfully saved".format(datapoint_name, n))
 
                     warnings.filterwarnings('default')
 
@@ -111,7 +115,7 @@ def get_scaled_sampler(filename, window_shape, stride):
     stride_scaled = np.asarray(np.floor(stride * pixel_dim_scales), dtype=np.int)
 
     logging.debug("Window shape has been modified to {} and stride to {} to align with voxel resolution of {}".format(
-        window_scaled, window_shape, stride_scaled, stride, pixel_dims))
+        window_scaled, stride_scaled, pixel_dims))
 
     return window_scaled, stride_scaled
 
@@ -135,7 +139,9 @@ def pad(stack, padded_shape):
 
 
 def resample(stack, output_shape):
-    input_shape = stack.shape
+    input_shape = np.asarray(stack.shape)
+    output_shape = np.asarray(output_shape)
+
     scale = output_shape / input_shape
 
     # Resample stack using cubic interpolation
