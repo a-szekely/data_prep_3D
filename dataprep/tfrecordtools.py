@@ -1,5 +1,8 @@
 import os
 import logging
+import time
+
+import numpy as np
 
 import tensorflow as tf
 from skimage import io
@@ -35,8 +38,9 @@ def process_all_tfrecord():
         with tf.python_io.TFRecordWriter(path_tfrecord) as writer:
             writer.write(example)
 
-        logging.info("Written {}.tfrecord - {} out of {} done".format(scan_files[i].split['.'][0],
+        logging.info("Written {}.tfrecord - {} out of {} done".format(scan_files[i].split('.')[0],
                                                                       (i + 1), len(mask_files)))
+        visualise_example(example)
 
 
 def ndarray2feature(stack):
@@ -68,14 +72,18 @@ def visualise_example(serialized_example):
     input = tf.expand_dims(input, 3)
     target = tf.expand_dims(target, 3)
 
-    input_flat = tf.math.reduce_sum(input, axis=0)
-    target_flat = tf.math.reduce_sum(target, axis=0)
+    input_flat = np.squeeze(tf.math.reduce_sum(input, axis=0))
+    target_flat = np.squeeze(tf.math.reduce_sum(target, axis=0))
 
     fig = plt.figure()
     fig.add_subplot(1, 2, 1)
     plt.imshow(input_flat)
     fig.add_subplot(1, 2, 2)
     plt.imshow(target_flat)
+    plt.show()
+    time.sleep(5)
+    plt.close()
+
 
 
 

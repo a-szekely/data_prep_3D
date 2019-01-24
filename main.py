@@ -5,4 +5,6 @@ from dataprep import tiftools, tfrecordtools
 tf.enable_eager_execution()
 logging.basicConfig(level=logging.DEBUG)
 
-tiftools.split_all((128, 128, 128), (128, 128, 128))
+# tiftools.split_all((128, 128, 128), (128, 128, 128))
+
+tfrecordtools.process_all_tfrecord()
