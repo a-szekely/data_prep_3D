@@ -12,6 +12,11 @@ import dataprep.constants
 
 
 def process_all_tfrecord():
+
+    # Ensure that Eager Execution is on. Otherwise it tends to run out of memory.
+    if not tf.python.context.executing_eagerly():
+        raise RuntimeError("dataprep.process_all_tfrecord is not supported without eager_execution")
+
     # Find all mask and scan files, and sort them (os.listdir reads files in a random order)
     mask_files = os.listdir(dataprep.constants.MASK_DIR)
     scan_files = os.listdir(dataprep.constants.SCAN_DIR)
