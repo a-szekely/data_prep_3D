@@ -84,10 +84,10 @@ def split_one(scan_name, mask_name, window, stride):
 
                     # Resample mask and scan to ensure isotropic voxels
                     mask_sample = resample(mask_sample, window)
-                    mask_sample = (mask_sample > 0.1)
                     mask_sample = mask_sample.astype(dtype=np.int32)
 
                     scan_sample = resample(scan_sample, window)
+                    scan_sample = scan_sample.astype(dtype=np.int32)
 
                     # Disable warnings while saving samples, which arise from the low contrast nature of the mask
                     warnings.filterwarnings('ignore')
@@ -145,7 +145,7 @@ def resample(stack, output_shape):
     scale = output_shape / input_shape
 
     # Resample stack using cubic interpolation
-    scaled_stack = scipy.ndimage.zoom(stack, scale)
+    scaled_stack = scipy.ndimage.zoom(stack, scale, order=1)
 
     # NB. Fiji only likes int32
     return np.ascontiguousarray(scaled_stack, 'int32')
