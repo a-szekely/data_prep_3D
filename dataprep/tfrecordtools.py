@@ -21,29 +21,38 @@ def process_all_tfrecord():
     # Make sure there are as many masks as scans
     assert len(mask_files) == len(scan_files)
 
-    for i in range(0, len(mask_files)):
+    for n in range(0, len(mask_files)):
         # Assert that the i^th mask corresponds to the i^th scan
-        assert mask_files[i].split('.')[0] == scan_files[i].split('.')[0]
+        assert mask_files[n].split('.')[0] == scan_files[n].split('.')[0]
 
-        mask = io.imread('/'.join([dataprep.constants.MASK_DIR, mask_files[i]]))
-        scan = io.imread('/'.join([dataprep.constants.SCAN_DIR, scan_files[i]]))
+        mask = io.imread('/'.join([dataprep.constants.MASK_DIR, mask_files[n]]))
+        scan = io.imread('/'.join([dataprep.constants.SCAN_DIR, scan_files[n]]))
 
         # Transform to float32 type and normalize, so values fall between 0 and 1
         mask = np.divide(mask, 255.0)
         scan = np.divide(scan, 255.0)
+
+        pooled_scan = np.zeros((64, 64, 64), dtype=scan.dtype)
+
+        for i in range(0, 64):
+            for j in range(0, 64):
+                for k in range(0, 64):
+                    pooled_scan[k, j, i] = np.max(scan[(k * 2):(k * 2 + 1), (j * 2):(j * 2 + 1), (i * 2):(i * 2 + 1)])
+
+        scan = pooled_scan
 
         mask_feature = ndarray2feature(mask)
         scan_feature = ndarray2feature(scan)
 
         example = features2serial(scan_feature, mask_feature)
 
-        path_tfrecord = '{}/{}.tfrecord'.format(dataprep.constants.TFRECORD_DIR, scan_files[i].split('.')[0])
+        path_tfrecord = '{}/{}.tfrecord'.format(dataprep.constants.TFRECORD_DIR, scan_files[n].split('.')[0])
 
         with tf.python_io.TFRecordWriter(path_tfrecord) as writer:
             writer.write(example)
 
-        logging.info("Written {}.tfrecord - {} out of {} done".format(scan_files[i].split('.')[0],
-                                                                      (i + 1), len(mask_files)))
+        logging.info("Written {}.tfrecord - {} out of {} done".format(scan_files[n].split('.')[0],
+                                                                      (n + 1), len(mask_files)))
 
 
 def ndarray2feature(stack):
